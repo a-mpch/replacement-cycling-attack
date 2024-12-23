@@ -1,0 +1,66 @@
+caddy:
+  enabled: true
+fork_observer:
+  configQueryInterval: 20
+  enabled: true
+nodes:
+- addnode:
+  - tank-0001
+  - tank-0007
+  - tank-0004
+  - tank-0003
+  - tank-0006
+  - tank-0005
+  - tank-0002
+  image:
+    tag: '27.0'
+  name: tank-0000
+- addnode:
+  - tank-0002
+  - tank-0005
+  - tank-0007
+  - tank-0003
+  - tank-0004
+  image:
+    tag: '27.0'
+  name: tank-0001
+- addnode:
+  - tank-0003
+  - tank-0007
+  - tank-0004
+  - tank-0005
+  - tank-0006
+  image:
+    tag: '27.0'
+  name: tank-0002
+- addnode:
+  - tank-0004
+  - tank-0005
+  - tank-0007
+  image:
+    tag: '27.0'
+  name: tank-0003
+- addnode:
+  - tank-0005
+  image:
+    tag: '27.0'
+  name: tank-0004
+- addnode:
+  - tank-0006
+  image:
+    tag: '27.0'
+  name: tank-0005
+- addnode:
+  - tank-0007
+  - tank-0003
+  - tank-0001
+  image:
+    tag: '27.0'
+  name: tank-0006
+- addnode:
+  - tank-0000
+  - tank-0005
+  - tank-0004
+  image:
+    tag: '27.0'
+  name: tank-0007
