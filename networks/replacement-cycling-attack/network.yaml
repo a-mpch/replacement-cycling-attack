@@ -1,8 +1,8 @@
 caddy:
-  enabled: true
+  enabled: false
 fork_observer:
   configQueryInterval: 20
-  enabled: true
+  enabled: false
 nodes:
 - addnode:
   - tank-0001

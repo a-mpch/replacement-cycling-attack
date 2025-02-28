@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+import math
 from decimal import Decimal
-from random import randint
+import random
 import threading
 from time import sleep
 
@@ -33,12 +34,30 @@ class ReplacementCycling(Commander):
     def set_test_params(self):
         self.num_nodes = 2
 
+    def add_options(self, parser):
+        ten_minutes_in_seconds = 600
+        parser.description = "Generate blocks over time"
+        parser.usage = f"warnet run /path/to/{__name__}.py [options]"
+        parser.add_argument(
+            "--interval",
+            dest="interval",
+            default=ten_minutes_in_seconds,
+            type=int,
+            help=f"Generate a block on average every n seconds [Default: {ten_minutes_in_seconds}]",
+        )
+
     def get_witness_script(self):
         defender_pubkey = self.defender_seckey.get_pubkey()
         attacker_pubkey = self.attacker_seckey.get_pubkey()
 
         return CScript(
-            [OP_1, defender_pubkey.get_bytes(), attacker_pubkey.get_bytes(), OP_2, OP_CHECKMULTISIG]  # type: ignore
+            [
+                OP_1,
+                defender_pubkey.get_bytes(),
+                attacker_pubkey.get_bytes(),
+                OP_2,
+                OP_CHECKMULTISIG,
+            ]  # type: ignore
         )
 
     def build_multisig_transaction(self, coins):
@@ -47,7 +66,9 @@ class ReplacementCycling(Commander):
         witness_program = sha256(witness_script)
         script_pubkey = CScript([OP_0, witness_program])  # type: ignore
         funding_tx = CTransaction()
-        funding_tx.vin.append(CTxIn(COutPoint(int(coins["txid"], 16), coins["vout"]), b""))
+        funding_tx.vin.append(
+            CTxIn(COutPoint(int(coins["txid"], 16), coins["vout"]), b"")
+        )
         output_value = int(Decimal("0.8") * coins["value"] * COIN)
         funding_tx.vout.append(CTxOut(output_value, script_pubkey))
         funding_tx.rehash()
@@ -110,7 +131,8 @@ class ReplacementCycling(Commander):
         assert ab_funding_txid in self.defender.getrawmempool()
         assert ab_funding_txid in self.attacker.getrawmempool()
         self.log.info(
-            f"@{last_blockheight} {ab_funding_txid[0:7]} Funding Txn " "- Seen in the mempool"
+            f"@{last_blockheight} {ab_funding_txid[0:7]} Funding Txn "
+            "- Seen in the mempool"
         )
         self.log.info(f"Funding txid: {ab_funding_txid}")
         self.generate(self.defender, 1)
@@ -129,7 +151,9 @@ class ReplacementCycling(Commander):
         self.log.info("Checking if transaction is confirmed in a block")
         last_block = node.getblock(node.getbestblockhash())
         if pending_transaction.hash not in [tx for tx in last_block["tx"]]:
-            raise Exception(f"Transaction {pending_transaction.hash} not found in the latest block")
+            raise Exception(
+                f"Transaction {pending_transaction.hash} not found in the latest block"
+            )
 
         self.log.info(
             f"@{self.__get_last_height_by_node(node)} {pending_transaction.hash[0:7]} {log_transaction_name} "
@@ -153,34 +177,48 @@ class ReplacementCycling(Commander):
         tx.vin.append(CTxIn(COutPoint(int(coins["txid"], 16), coins["vout"]), b""))
         for _i in range(10):
             tx.vout.append(
-                CTxOut(per_output_amount, bytearray(self.attacker_wallet.get_scriptPubKey()))  # type: ignore
+                CTxOut(
+                    per_output_amount,
+                    bytearray(self.attacker_wallet.get_scriptPubKey()),
+                )  # type: ignore
             )
 
         self.defender_wallet.sign_tx(tx)
         tx.rehash()
-        txid = self.defender.sendrawtransaction(hexstring=tx.serialize().hex(), maxfeerate=0)
+        txid = self.defender.sendrawtransaction(
+            hexstring=tx.serialize().hex(), maxfeerate=0
+        )
         self.log.info(
-            f"@{last_blockheight} {txid[0:7]} Attacker tx UTXOs " "- Broadcasted by: Defender"
+            f"@{last_blockheight} {txid[0:7]} Attacker tx UTXOs "
+            "- Broadcasted by: Defender"
         )
 
         self.sync_all()
 
         assert txid in self.defender.getrawmempool()
         assert txid in self.attacker.getrawmempool()
-        self.log.info(f"@{last_blockheight} {txid[0:7]} Attacker tx UTXOs " "- Seen in the mempool")
+        self.log.info(
+            f"@{last_blockheight} {txid[0:7]} Attacker tx UTXOs "
+            "- Seen in the mempool"
+        )
         self.log.info(f"Funding txid: {txid}")
         self.generate(self.defender, 1)
         self.sync_all()
         self.validate_mined(tx, log_transaction_name="Attacker tx UTXOs")
+        self.attacker_wallet.rescan_utxos()
         return tx
 
-    def build_defender_transaction(self, multsig: CTransaction, fee: int = 200) -> CTransaction:
+    def build_defender_transaction(
+        self, multsig: CTransaction, fee: int = 200
+    ) -> CTransaction:
         amount = multsig.vout[0].nValue - 200
         if multsig.hash is None:
             raise Exception("multsig.hash is None")
         tx = CTransaction()
         tx.vin.append(CTxIn(COutPoint(int(multsig.hash, 16), 0), b""))
-        tx.vout.append(CTxOut(amount, bytearray(self.defender_wallet.get_scriptPubKey())))  # type: ignore
+        tx.vout.append(
+            CTxOut(amount, bytearray(self.defender_wallet.get_scriptPubKey()))
+        )  # type: ignore
         tx.wit.vtxinwit.append(CTxInWitness())
         tx.wit.vtxinwit[0].scriptWitness.stack = [self.get_witness_script()]
 
@@ -215,21 +253,30 @@ class ReplacementCycling(Commander):
 
         assert txid in self.defender.getrawmempool()
         assert txid in self.attacker.getrawmempool()
-        self.log.info(f"@{last_blockheight} {txid[0:7]} Spend Tx " "- Seen in the mempool")
+        self.log.info(
+            f"@{last_blockheight} {txid[0:7]} Spend Tx " "- Seen in the mempool"
+        )
         return tx
 
     def build_attacker_transaction(
-        self, attacker_tx: CTransaction, multisig_tx: CTransaction, attacker_index: int = 0
+        self,
+        attacker_tx: CTransaction,
+        multisig_tx: CTransaction,
+        attacker_index: int = 0,
     ):
         if multisig_tx.hash is None:
             raise Exception("multisig_tx.hash is None")
         if attacker_tx.hash is None:
             raise Exception("attacker_tx.hash is None")
-        amount = multisig_tx.vout[0].nValue + attacker_tx.vout[attacker_index].nValue - 1000
+        amount = (
+            multisig_tx.vout[0].nValue + attacker_tx.vout[attacker_index].nValue - 1000
+        )
 
         attack_tx = CTransaction()
         attack_tx.vin.append(CTxIn(COutPoint(int(multisig_tx.hash, 16), 0), b""))
-        attack_tx.vin.append(CTxIn(COutPoint(int(attacker_tx.hash, 16), attacker_index), b""))
+        attack_tx.vin.append(
+            CTxIn(COutPoint(int(attacker_tx.hash, 16), attacker_index), b"")
+        )
         attack_tx.vout.append(
             CTxOut(amount, bytearray(self.attacker_wallet.get_scriptPubKey()))  # type: ignore
         )
@@ -263,7 +310,9 @@ class ReplacementCycling(Commander):
     ):
         last_blockheight = self.get_defender_last_last_height()
         self.log.info(f"@{last_blockheight} Start cycling attack...")
-        attack_tx = self.build_attacker_transaction(attacker_tx, multisig_tx, attacker_index)
+        attack_tx = self.build_attacker_transaction(
+            attacker_tx, multisig_tx, attacker_index
+        )
         attack_txid = self.attacker_wallet.sendrawtransaction(
             from_node=self.attacker, tx_hex=attack_tx.serialize().hex()
         )
@@ -281,7 +330,9 @@ class ReplacementCycling(Commander):
             raise Exception("defender_spend_tx.hash is None")
         assert defender_spend_tx.hash not in self.defender.getrawmempool()
         assert defender_spend_tx.hash not in self.attacker.getrawmempool()
-        self.log.info(f"@{last_blockheight} {attack_txid[0:7]} Attack Tx " "- Seen in the mempool")
+        self.log.info(
+            f"@{last_blockheight} {attack_txid[0:7]} Attack Tx " "- Seen in the mempool"
+        )
         self.log.info(
             f"@{last_blockheight} {defender_spend_tx.hash[0:7]} Spend Tx "
             "- Not seen in the mempool"
@@ -295,7 +346,9 @@ class ReplacementCycling(Commander):
             raise Exception("attacker_tx.hash is None")
         amount = attacker_tx.vout[attacker_index].nValue - 2000
         attack_tx = CTransaction()
-        attack_tx.vin.append(CTxIn(COutPoint(int(attacker_tx.hash, 16), attacker_index), b""))
+        attack_tx.vin.append(
+            CTxIn(COutPoint(int(attacker_tx.hash, 16), attacker_index), b"")
+        )
         attack_tx.vout.append(
             CTxOut(amount, bytearray(self.attacker_wallet.get_scriptPubKey()))  # type: ignore
         )
@@ -339,7 +392,8 @@ class ReplacementCycling(Commander):
         assert additional_attacker_utxos.hash not in self.defender.getrawmempool()
         assert additional_attacker_utxos.hash not in self.attacker.getrawmempool()
         self.log.info(
-            f"@{last_blockheight} {cycling_txid[0:7]} Cycling Tx " "- Seen in the mempool"
+            f"@{last_blockheight} {cycling_txid[0:7]} Cycling Tx "
+            "- Seen in the mempool"
         )
         self.log.info(
             f"@{last_blockheight} {additional_attacker_utxos.hash[0:7]} Attack Tx "
@@ -363,7 +417,9 @@ class ReplacementCycling(Commander):
             "- Not confirmed in latest block"
         )
 
-    def test_attacker_replaces_and_can_be_mined(self, additional_attacker_utxos: CTransaction):
+    def test_attacker_replaces_and_can_be_mined(
+        self, additional_attacker_utxos: CTransaction
+    ):
         # This test scenario is the basic test of RBF used in other tests.
         # Given our multisig transaction, denfeder tries to spend it:
         #           Defender
@@ -430,10 +486,13 @@ class ReplacementCycling(Commander):
         attacker_tx = self.replace_with_attacker(
             multisig_tx, defender_spend_tx, additional_attacker_utxos, 1
         )
-        cycling_tx = self.cycle_attacker_transaction(attacker_tx, additional_attacker_utxos, 1)
+        cycling_tx = self.cycle_attacker_transaction(
+            attacker_tx, additional_attacker_utxos, 1
+        )
         self.generate(self.defender_wallet, 1)
         self.validate_mined(
-            cycling_tx, log_transaction_name="Cycling attacker tx that replaces defender tx"
+            cycling_tx,
+            log_transaction_name="Cycling attacker tx that replaces defender tx",
         )
         self.validate_defender_tx_not_mined(defender_spend_tx)
         mempool_accept_result = self.defender.testmempoolaccept(
@@ -442,17 +501,26 @@ class ReplacementCycling(Commander):
         assert mempool_accept_result[0]["allowed"]
 
     @staticmethod
-    def miner_task(node, self):
+    def miner_task(node, stop_msg, self):
         counter = 0
         while True:
             if counter >= 10:
                 self.log.info("@MINER reached 10 blocks, exiting")
                 break
-            self.generate(node, 1)
-            time_sleep = randint(10, 60)
-            self.log.info(f"@MINER Mined block {node.getblockcount()}")
-            self.log.info(f"@MINER sleeping for {time_sleep} seconds")
+            if stop_msg.is_set():
+                self.log.info("@MINER got stop message")
+                break
+            # Poisson
+            # 600 seconds | t: time | p: probability of event
+            # p = 1 - e^(-1/600 * t)
+            # t = -ln(1 - p) / (1/600)
+            time_sleep = int(
+                -math.log(1 - random.random()) / (1 / self.options.interval)
+            )
+            self.log.info(f"@MINER Next block in {time_sleep} seconds")
             sleep(time_sleep)
+            self.generate(node, 1)
+            self.log.info(f"@MINER Mined block {node.getblockcount()}")
 
     @staticmethod
     def defender_task(defender_node, self):
@@ -466,14 +534,16 @@ class ReplacementCycling(Commander):
             self.log.info("@DEFENDER waiting for transaction to be mined")
 
     @staticmethod
-    def attacker_task(attacker_node, additional_attacker_utxos, self):
+    def attacker_task(attacker_node, additional_attacker_utxos, multisig_tx, self):
         attacker_tx = None
         index = 0
         while True:
             if attacker_tx is None:
                 last_blockheight = self.get_defender_last_last_height()
                 self.log.info(f"@{last_blockheight} Start cycling attack...")
-                attack_tx = self.build_attacker_transaction(attacker_tx, multisig_tx, index)
+                attack_tx = self.build_attacker_transaction(
+                    attacker_tx, multisig_tx, index
+                )
                 attack_txid = self.attacker_wallet.sendrawtransaction(
                     from_node=self.attacker, tx_hex=attack_tx.serialize().hex()
                 )
@@ -499,6 +569,7 @@ class ReplacementCycling(Commander):
         # the defender transaction.
         #
         self.log.info("Starting replacement cycling")
+        self.wait_for_tanks_connected()
         self.defender = self.nodes[0]
         self.attacker = self.nodes[1]
         self.defender_wallet = MiniWallet(self.defender)
@@ -508,12 +579,19 @@ class ReplacementCycling(Commander):
         self.setup_attacker_junk_transaction()
         self.log.info(f"Balance attacker {self.attacker_wallet.get_balance()}")
         self.log.info(f"Balance defender {self.defender_wallet.get_balance()}")
-        miner_thread = threading.Thread(target=self.miner_task, args=(self.defender, self))
+
+        stop_msg = threading.Event()
+        miner_thread = threading.Thread(
+            target=self.miner_task, args=(self.defender, stop_msg, self)
+        )
         miner_thread.start()
         self.log.info("Miner started")
 
         self.test_attacker_replaces_and_can_be_mined(additional_attacker_utxos)
         self.test_cycling_out_defender_tx(additional_attacker_utxos)
+
+        stop_msg.set()
+        miner_thread.join()
 
 
 def main():
